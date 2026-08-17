@@ -1,0 +1,21 @@
+[project]
+name = "worker"
+version = "0.1.0"
+description = "Worker service for pople"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "database",
+    "orca",
+    "pople-logging",
+    "pydantic-settings>=2.14.2",
+    "sqlmodel>=0.0.39",
+]
+
+[tool.uv.sources]
+orca = { workspace = true }
+database = { workspace = true }
+pople-logging = { workspace = true }
+
+[tool.ty.environment]
+python = "../../.venv"

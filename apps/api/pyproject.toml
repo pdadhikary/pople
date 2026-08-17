@@ -1,0 +1,23 @@
+[project]
+name = "api"
+version = "0.1.0"
+description = "API backend of pople"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "websockets>=17.0.1",
+    "sqlmodel>=0.0.39",
+    "database",
+    "pople-logging",
+]
+
+[tool.uv.sources]
+database = { workspace = true }
+pople-logging = { workspace = true }
+
+[tool.fastapi]
+entrypoint = "app:app"
+
+[tool.ty.environment]
+python = "../../.venv"

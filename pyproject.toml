@@ -1,0 +1,14 @@
+[project]
+name = "pople"
+version = "0.1.0"
+description = "Web-based job queue for ORCA computational chemistry workflows"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/*"]
+exclude = ["apps/web"]
+
+[tool.ty.environment]
+python = ".venv"

@@ -1,0 +1,69 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: always
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./data:/var/lib/postgresql
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      JOBS_DIR: /workspace/jobs
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    volumes:
+      - ./logs:/logs
+      - ./jobs:/workspace/jobs
+    depends_on:
+      - postgres
+
+  web:
+    build:
+      context: apps/web/
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - ORIGIN=http://localhost:3000
+      - PORT=3000
+    depends_on:
+      - postgres
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    env_file:
+      - .env
+    environment:
+      JOB_TIMEOUT_SECONDS: 259200
+      LOG_LEVEL: INFO
+      JOBS_DIR: /workspace/jobs
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+    volumes:
+      - ./logs:/logs
+      - ./jobs:/workspace/jobs
+    depends_on:
+      - postgres
+

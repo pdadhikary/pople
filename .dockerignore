@@ -1,0 +1,13 @@
+.git
+.pytest_cache
+.ruff_cache
+.venv
+**/.venv
+**/.env
+.gitignore
+compose.yaml
+**/node_modules
+**/.vscode
+**/.svelte-kit
+**/__pycache__
+**/build
