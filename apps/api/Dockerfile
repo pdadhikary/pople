@@ -28,4 +28,7 @@ RUN chown -R pople:pople /workspace
 
 USER pople
 
+RUN chmod +x /workspace/apps/api/entrypoint.sh
+ENTRYPOINT ["/workspace/apps/api/entrypoint.sh"]
+
 CMD ["uv", "run", "--directory", "apps/api", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
