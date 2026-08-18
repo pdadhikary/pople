@@ -1,9 +1,8 @@
 <script lang="ts">
-    import type { JobStatus, LogEntry } from '$lib/types/domain';
+    import type { JobStatus } from '$lib/types/domain';
     import EmptyState from '$lib/components/EmptyState.svelte';
-    import { formatTime } from '$lib/utils/format';
 
-    let { entries, status }: { entries: LogEntry[]; status: JobStatus } = $props();
+    let { entries, status }: { entries: string[]; status: JobStatus } = $props();
 
     let scrollEl: HTMLDivElement | undefined = $state();
     let stickToBottom = $state(true);
@@ -61,12 +60,8 @@
             aria-live="polite"
             aria-label="ORCA job output"
         >
-            {#each entries as entry, i (i)}
-                <div class="flex gap-3">
-                    <span class="shrink-0 text-slate-500 select-none">{formatTime(entry.time)}</span
-                    >
-                    <span class="break-words whitespace-pre-wrap">{entry.content}</span>
-                </div>
+            {#each entries as line, i (i)}
+                <div class="whitespace-pre-wrap">{line}</div>
             {/each}
         </div>
     {/if}

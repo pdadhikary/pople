@@ -52,10 +52,10 @@
 
         <div class="flex shrink-0 items-center gap-2">
             <a
-                href={`/jobs/${job.id}/log`}
+                href={`/jobs/${job.id}/output`}
                 class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
-                View Log
+                View Output
             </a>
             <a
                 href={`/jobs/${job.id}/files`}

@@ -1,6 +1,8 @@
+import asyncio
 import io
 import zipfile
 from collections import deque
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from math import ceil
 from pathlib import Path
@@ -10,6 +12,7 @@ import database.models as mo
 from database.session import get_db
 from fastapi import APIRouter, Depends, Form, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pople_logging import get_logger
 from sqlalchemy import ColumnElement
 from sqlmodel import Session, col, func, select
@@ -22,6 +25,10 @@ jobs_router = APIRouter()
 logger = get_logger("api.routes.jobs")
 
 JOBS_DIR = Path(settings.jobs_dir)
+# Tail size (bytes) for the REST /output snapshot. Reading the whole .out on every poll
+# is O(file size); tailing is O(tail). SSE /output/stream is offset-based and O(new bytes).
+OUTPUT_TAIL_BYTES = 64 * 1024
+OUTPUT_SNAPSHOT_LINES = 200
 INCLUDED_EXTENSIONS = {
     ".out",
     ".xyz",
@@ -276,29 +283,34 @@ def get_optimization_data(
         logger.warning("Optimization requested for missing job %s", job_id)
         raise HTTPException(status_code=404, detail="Job not found.")
 
-    total_scf_energy = get_job_metric_series(db, job_id, mo.MetricType.TOTAL_SCF_ENERGY)
-    energy_change = get_job_metric_series(db, job_id, mo.MetricType.ENERGY_CHANGE)
-    max_grad = get_job_metric_series(db, job_id, mo.MetricType.MAX_GRAD)
-    rms_grad = get_job_metric_series(db, job_id, mo.MetricType.RMS_GRAD)
-    max_step = get_job_metric_series(db, job_id, mo.MetricType.MAX_STEP)
-    rms_step = get_job_metric_series(db, job_id, mo.MetricType.RMS_STEP)
+    def to_metric_schema(
+        metrics: list[mo.JobMetric],
+    ) -> tuple[list[sc.Metric], float | None]:
+        return [
+            sc.Metric(value=metric.value, recorded_dt=metric.recorded_dt)
+            for metric in metrics
+        ], metrics[-1].threshold if len(metrics) > 0 else None
 
-    optimization_steps: list[sc.OptimizationStep] = []
-    for ec, mg, rg, ms, rs in zip(
-        energy_change, max_grad, rms_grad, max_step, rms_step, strict=False
-    ):
-        optimization_steps.append(
-            sc.OptimizationStep(
-                energy_change=ec.value,
-                rms_grad=rg.value,
-                max_grad=mg.value,
-                rms_step=rs.value,
-                max_step=ms.value,
-            )
-        )
+    total_scf_energy, _ = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.TOTAL_SCF_ENERGY)
+    )
+    energy_change, energy_change_thresh = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.ENERGY_CHANGE)
+    )
+    max_grad, max_grad_thresh = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.MAX_GRAD)
+    )
+    rms_grad, rms_grad_thresh = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.RMS_GRAD)
+    )
+    max_step, max_step_thresh = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.MAX_STEP)
+    )
+    rms_step, rms_step_thesh = to_metric_schema(
+        get_job_metric_series(db, job_id, mo.MetricType.RMS_STEP)
+    )
 
-    num_steps = len(optimization_steps)
-    scf_energy_steps = [metric.value for metric in total_scf_energy]
+    num_steps = len(energy_change)
 
     logger.debug("Job %s optimization: %d steps", job_id, num_steps)
 
@@ -310,17 +322,19 @@ def get_optimization_data(
         started_dt=job.started_dt,
         finished_dt=job.finished_dt,
         num_opt_steps=num_steps,
-        opt_steps=optimization_steps,
-        scf_energy_steps=scf_energy_steps,
+        energy_change=energy_change,
+        max_grad=max_grad,
+        rms_grad=rms_grad,
+        max_step=max_step,
+        rms_step=rms_step,
+        scf_energy_steps=total_scf_energy,
         thresholds=sc.Thresholds(
-            energy_change=energy_change[0].threshold or 0.0,
-            rms_grad=rms_grad[0].threshold or 0.0,
-            max_grad=max_grad[0].threshold or 0.0,
-            rms_step=rms_step[0].threshold or 0.0,
-            max_step=max_step[0].threshold or 0.0,
-        )
-        if num_steps > 0
-        else sc.Thresholds(),
+            energy_change=energy_change_thresh or 0.0,
+            rms_grad=rms_grad_thresh or 0.0,
+            max_grad=max_grad_thresh or 0.0,
+            rms_step=rms_step_thesh or 0.0,
+            max_step=max_step_thresh or 0.0,
+        ),
     )
 
 
@@ -353,6 +367,18 @@ def get_geometry_data(
     )
 
 
+def _tail_output_lines(path: Path, max_lines: int = OUTPUT_SNAPSHOT_LINES) -> list[str]:
+    """Read the last `max_lines` lines of `path` without reading the whole file."""
+    if not path.exists():
+        return []
+    size = path.stat().st_size
+    with path.open("r", encoding="utf-8") as f:
+        if size > OUTPUT_TAIL_BYTES:
+            f.seek(size - OUTPUT_TAIL_BYTES)
+            f.readline()  # discard the (likely) partial first line after the seek
+        return [line.rstrip("\n") for line in deque(f, maxlen=max_lines)]
+
+
 @jobs_router.get("/{job_id}/output")
 def get_output(job_id: int, db: Session = Depends(get_db)) -> sc.OutputQueryResponse:
     logger.debug("Fetching outputs for job %s", job_id)
@@ -361,12 +387,65 @@ def get_output(job_id: int, db: Session = Depends(get_db)) -> sc.OutputQueryResp
         logger.warning("Outputs requested for missing job %s", job_id)
         raise HTTPException(status_code=404, detail="Job not found.")
 
-    lines = []
     output_file = Path(job.job_dir_path) / f"{job.name}.out"
-    if not output_file.exists():
-        return sc.OutputQueryResponse(lines=lines)
-
-    with open(output_file, "r", encoding="utf-8") as f:
-        lines = list(deque(f, maxlen=200))
-
+    lines = _tail_output_lines(output_file)
+    logger.debug("Job %s output: %d lines", job_id, len(lines))
     return sc.OutputQueryResponse(lines=lines)
+
+
+@jobs_router.get("/{job_id}/output/stream", response_class=EventSourceResponse)
+async def stream_output(job_id: int, db: Session = Depends(get_db)) -> AsyncIterator[ServerSentEvent]:
+    logger.debug("Streaming output for job %s", job_id)
+    job = db.get(mo.Job, job_id)
+    if not job or job.id is None:
+        raise HTTPException(status_code=404, detail="Job not found.")
+
+    output_file = Path(job.job_dir_path) / f"{job.name}.out"
+
+    # Initial snapshot: send the last N lines as default events and record the byte
+    # offset at the end of that snapshot so subsequent reads are O(new bytes).
+    lines = _tail_output_lines(output_file)
+    offset = output_file.stat().st_size if output_file.exists() else 0
+    for line in lines:
+        yield ServerSentEvent(raw_data=line)
+
+    # Tail the file for newly-appended bytes until the job reaches a terminal state.
+    pending = ""
+    terminal = {mo.JobStatus.FINISHED, mo.JobStatus.ERROR, mo.JobStatus.CANCELLED}
+    while True:
+        await asyncio.sleep(0.5)
+        job = db.get(mo.Job, job_id)
+        if job is not None and job.status in terminal:
+            # flush any final partial line before signalling end
+            if pending:
+                yield ServerSentEvent(raw_data=pending)
+            yield ServerSentEvent(
+                data={"status": job.status.value if job is not None else "unknown"},
+                event="end",
+            )
+            return
+
+        if not output_file.exists():
+            continue
+
+        size = output_file.stat().st_size
+        if size <= offset:
+            continue
+
+        with output_file.open("r", encoding="utf-8") as f:
+            f.seek(offset)
+            chunk = f.read()
+            offset = size
+
+        pending += chunk
+        complete, pending = _split_complete_lines(pending)
+        for line in complete:
+            yield ServerSentEvent(raw_data=line)
+
+
+def _split_complete_lines(buffer: str) -> tuple[list[str], str]:
+    """Split `buffer` into complete (newline-terminated) lines, return any trailing partial line."""
+    if "\n" not in buffer:
+        return [], buffer
+    parts = buffer.split("\n")
+    return parts[:-1], parts[-1]

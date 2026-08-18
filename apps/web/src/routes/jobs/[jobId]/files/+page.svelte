@@ -89,10 +89,10 @@
             <div class="flex items-center gap-2">
                 <DownloadAllButton jobId={job.id} disabled={files.length === 0} />
                 <a
-                    href={`/jobs/${job.id}/log`}
+                    href={`/jobs/${job.id}/output`}
                     class="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
-                    View Log
+                    View Output
                 </a>
             </div>
         </div>

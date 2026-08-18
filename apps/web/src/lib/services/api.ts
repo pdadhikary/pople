@@ -4,8 +4,8 @@ import type {
     Job,
     JobFile,
     JobStatus,
+    Metric,
     OptimizationData,
-    OptimizationStep,
     Thresholds
 } from '$lib/types/domain';
 
@@ -51,12 +51,13 @@ interface ApiFileListResponse {
     files: ApiFile[];
 }
 
-interface ApiOptimizationStep {
-    energy_change: number;
-    rms_grad: number;
-    max_grad: number;
-    rms_step: number;
-    max_step: number;
+interface ApiOutputQueryResponse {
+    lines: string[];
+}
+
+interface ApiMetric {
+    value: number;
+    recorded_dt: string;
 }
 
 interface ApiThresholds {
@@ -76,9 +77,12 @@ interface ApiOptimizationData {
     finished_dt: string | null;
     num_opt_steps: number;
     thresholds: ApiThresholds;
-    opt_steps: ApiOptimizationStep[];
-    scf_energy_steps: number[];
-    trajectory_file_path: string;
+    energy_change: ApiMetric[];
+    rms_grad: ApiMetric[];
+    max_grad: ApiMetric[];
+    rms_step: ApiMetric[];
+    max_step: ApiMetric[];
+    scf_energy_steps: ApiMetric[];
 }
 
 interface ApiGeometryStep {
@@ -142,6 +146,11 @@ export function zipUrl(jobId: number): string {
     return `${API_BASE}/jobs/${jobId}/files/zip`;
 }
 
+/** Full URL of the SSE stream of a job's live ORCA output. */
+export function outputStreamUrl(jobId: number): string {
+    return `${API_BASE}/jobs/${jobId}/output/stream`;
+}
+
 /** List jobs (fetches a single large page; server-side pagination reserved for later). */
 export async function getJobs(): Promise<Job[]> {
     const data = await http<ApiJobListResponse>('/jobs/?page=1&page_size=100');
@@ -176,6 +185,12 @@ export async function getJobFiles(jobId: number): Promise<JobFile[]> {
     }));
 }
 
+/** Fetch the last ~200 lines of a job's .out as a snapshot (before opening the SSE stream). */
+export async function getJobOutput(jobId: number): Promise<string[]> {
+    const data = await http<ApiOutputQueryResponse>(`/jobs/${jobId}/output`);
+    return data.lines;
+}
+
 /** Fetch the text content of a job's input file (named `{jobName}.inp`). */
 export async function getJobInputFileText(jobId: number, jobName: string): Promise<string> {
     const res = await fetch(`${API_BASE}/jobs/${jobId}/files/${encodeURIComponent(jobName)}.inp`);
@@ -195,14 +210,8 @@ function mapThresholds(t: ApiThresholds): Thresholds {
     };
 }
 
-function mapOptimizationStep(s: ApiOptimizationStep): OptimizationStep {
-    return {
-        energyChange: s.energy_change,
-        rmsGrad: s.rms_grad,
-        maxGrad: s.max_grad,
-        rmsStep: s.rms_step,
-        maxStep: s.max_step
-    };
+function mapMetric(m: ApiMetric): Metric {
+    return { value: m.value, recordedAt: m.recorded_dt };
 }
 
 export async function getOptimizationData(jobId: number): Promise<OptimizationData> {
@@ -210,9 +219,12 @@ export async function getOptimizationData(jobId: number): Promise<OptimizationDa
     return {
         numOptSteps: data.num_opt_steps,
         thresholds: mapThresholds(data.thresholds),
-        optSteps: data.opt_steps.map(mapOptimizationStep),
-        scfEnergySteps: data.scf_energy_steps,
-        trajectoryFilePath: data.trajectory_file_path
+        energyChange: data.energy_change.map(mapMetric),
+        rmsGrad: data.rms_grad.map(mapMetric),
+        maxGrad: data.max_grad.map(mapMetric),
+        rmsStep: data.rms_step.map(mapMetric),
+        maxStep: data.max_step.map(mapMetric),
+        scfEnergySteps: data.scf_energy_steps.map(mapMetric)
     };
 }
 

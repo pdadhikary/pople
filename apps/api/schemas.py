@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Annotated, Literal
+from enum import Enum
+from typing import Annotated
 
 from database.models import Atom, JobStatus, MetricType
 from fastapi import File, Form, UploadFile
@@ -41,19 +42,20 @@ class Thresholds(BaseModel):
     max_step: float = 0.0
 
 
-class OptimizationStep(BaseModel):
-    energy_change: float
-    rms_grad: float
-    max_grad: float
-    rms_step: float
-    max_step: float
+class Metric(BaseModel):
+    value: float
+    recorded_dt: datetime
 
 
 class JobDetailQueryResponse(JobSubmissionResponse):
     num_opt_steps: int
     thresholds: Thresholds
-    opt_steps: list[OptimizationStep]
-    scf_energy_steps: list[float]
+    energy_change: list[Metric]
+    rms_grad: list[Metric]
+    max_grad: list[Metric]
+    rms_step: list[Metric]
+    max_step: list[Metric]
+    scf_energy_steps: list[Metric]
 
 
 class JobFile(BaseModel):
@@ -78,28 +80,42 @@ class GeometryQueryResponse(BaseModel):
     num_steps: int
     steps: list[GeometryQueryItem]
 
+
 class OutputQueryResponse(BaseModel):
     lines: list[str]
 
 
-class JobStatusMessage(BaseModel):
-    type: Literal["job_status"] = "job_status"
+class MessageType(str, Enum):
+    JOB_STATUS_CHANGED = "job_status_changed"
+    NEW_METRIC = "new_metric"
+    NEW_GEOMETRY = "new_geometry"
+
+
+class WsMessage(BaseModel):
+    type: MessageType
     job_id: int
-    status: JobStatus
 
 
-class MetricUpdateMessage(BaseModel):
-    type: Literal["metric_update"] = "metric_update"
+class JobStatusChangeMessage(WsMessage):
+    job_id: int
+    job_name: str
+    job_status: JobStatus
+    queued_dt: datetime
+    started_dt: datetime | None
+    finished_dt: datetime | None
+
+
+class NewMetricMessage(WsMessage):
+    type: MessageType
     job_id: int
     metric_type: MetricType
     value: float
     threshold: float | None = None
+    recorded_dt: datetime
 
 
-class GeometryUpdateMessage(BaseModel):
-    type: Literal["geometry_update"] = "geometry_update"
+class NewGeometryMessage(WsMessage):
+    type: MessageType
     job_id: int
-    geometry_step_id: int
-
-
-WsMessage = JobStatusMessage | MetricUpdateMessage | GeometryUpdateMessage
+    atoms: list[Atom]
+    recorded_dt: datetime

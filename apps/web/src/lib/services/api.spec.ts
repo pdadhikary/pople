@@ -183,33 +183,47 @@ describe('api client', () => {
                             rms_step: 1e-3,
                             max_step: 1e-2
                         },
-                        opt_steps: [
-                            {
-                                energy_change: -0.001,
-                                rms_grad: 0.0002,
-                                max_grad: 0.0005,
-                                rms_step: 0.01,
-                                max_step: 0.02
-                            },
-                            {
-                                energy_change: -0.00001,
-                                rms_grad: 0.000005,
-                                max_grad: 0.00002,
-                                rms_step: 0.0005,
-                                max_step: 0.001
-                            }
+                        energy_change: [
+                            { value: -0.001, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: -0.00001, recorded_dt: '2024-01-01T00:00:01Z' }
                         ],
-                        scf_energy_steps: [-100.1, -100.2],
-                        trajectory_file_path: '/jobs/5/files/mol-opt_trj.xyz'
+                        rms_grad: [
+                            { value: 0.0002, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: 0.000005, recorded_dt: '2024-01-01T00:00:01Z' }
+                        ],
+                        max_grad: [
+                            { value: 0.0005, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: 0.00002, recorded_dt: '2024-01-01T00:00:01Z' }
+                        ],
+                        rms_step: [
+                            { value: 0.01, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: 0.0005, recorded_dt: '2024-01-01T00:00:01Z' }
+                        ],
+                        max_step: [
+                            { value: 0.02, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: 0.001, recorded_dt: '2024-01-01T00:00:01Z' }
+                        ],
+                        scf_energy_steps: [
+                            { value: -100.1, recorded_dt: '2024-01-01T00:00:00Z' },
+                            { value: -100.2, recorded_dt: '2024-01-01T00:00:01Z' }
+                        ]
                     }
                 }
             });
             const data = await getOptimizationData(5);
             expect(data.numOptSteps).toBe(2);
-            expect(data.scfEnergySteps).toEqual([-100.1, -100.2]);
+            expect(data.scfEnergySteps).toEqual([
+                { value: -100.1, recordedAt: '2024-01-01T00:00:00Z' },
+                { value: -100.2, recordedAt: '2024-01-01T00:00:01Z' }
+            ]);
             expect(data.thresholds.rmsGrad).toBe(1e-5);
-            expect(data.optSteps[0].maxGrad).toBe(0.0005);
-            expect(data.trajectoryFilePath).toBe('/jobs/5/files/mol-opt_trj.xyz');
+            expect(data.energyChange[0]).toEqual({
+                value: -0.001,
+                recordedAt: '2024-01-01T00:00:00Z'
+            });
+            expect(data.maxGrad[0].value).toBe(0.0005);
+            expect(data.rmsStep).toHaveLength(2);
+            expect(data.maxStep[1].value).toBe(0.001);
         });
     });
 

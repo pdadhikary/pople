@@ -27,7 +27,7 @@
     let notFound = $state(false);
     let loadError = $state<string | undefined>();
 
-    const hasOptSteps = $derived((optData?.optSteps.length ?? 0) > 0);
+    const hasOptSteps = $derived((optData?.numOptSteps ?? 0) > 0);
 
     async function load() {
         if (Number.isNaN(jobId)) {
@@ -112,7 +112,7 @@
             <div class="rounded-lg border border-slate-200 bg-white p-4">
                 <h3 class="mb-3 text-sm font-semibold text-slate-800">SCF Energy</h3>
                 {#if hasOptSteps}
-                    <ScfEnergyChart values={optData?.scfEnergySteps ?? []} />
+                    <ScfEnergyChart values={optData?.scfEnergySteps.map((m) => m.value) ?? []} />
                 {:else}
                     <EmptyState
                         title="No optimization data available"
@@ -123,7 +123,14 @@
             <div class="rounded-lg border border-slate-200 bg-white p-4">
                 <h3 class="mb-3 text-sm font-semibold text-slate-800">Convergence</h3>
                 {#if hasOptSteps && optData}
-                    <ConvergenceChart optSteps={optData.optSteps} thresholds={optData.thresholds} />
+                    <ConvergenceChart
+                        energyChange={optData.energyChange}
+                        rmsGrad={optData.rmsGrad}
+                        maxGrad={optData.maxGrad}
+                        rmsStep={optData.rmsStep}
+                        maxStep={optData.maxStep}
+                        thresholds={optData.thresholds}
+                    />
                 {:else}
                     <EmptyState
                         title="No optimization data available"

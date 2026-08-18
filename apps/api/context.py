@@ -1,5 +1,4 @@
 from fastapi import WebSocket
-
 from pople_logging import get_logger
 
 logger = get_logger("api.websocket")
@@ -12,7 +11,9 @@ class ConnectionManager:
     async def connect(self, job_id: int, ws: WebSocket):
         await ws.accept()
         self.active.setdefault(job_id, []).append(ws)
-        logger.info("WebSocket connected (job=%s, clients=%d)", job_id, len(self.active[job_id]))
+        logger.info(
+            "WebSocket connected (job=%s, clients=%d)", job_id, len(self.active[job_id])
+        )
 
     def disconnect(self, job_id: int, ws: WebSocket):
         connections = self.active.get(job_id, [])
@@ -34,11 +35,15 @@ class ConnectionManager:
             except Exception:
                 dead.append(ws)
         if dead:
-            logger.warning("WebSocket send failed for %d client(s) (job=%s)", len(dead), job_id)
+            logger.warning(
+                "WebSocket send failed for %d client(s) (job=%s)", len(dead), job_id
+            )
         for ws in dead:
             self.disconnect(job_id, ws)
         logger.debug(
-            "WebSocket broadcast (job=%s, clients=%d)", job_id, len(self.active.get(job_id, []))
+            "WebSocket broadcast (job=%s, clients=%d)",
+            job_id,
+            len(self.active.get(job_id, [])),
         )
 
 

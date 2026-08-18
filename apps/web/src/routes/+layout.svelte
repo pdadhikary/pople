@@ -32,7 +32,7 @@
                 <span
                     class="hidden rounded bg-slate-100 px-1.5 py-0.5 text-xs font-normal text-slate-500 sm:inline"
                 >
-                    ORCA job monitor
+                    ORCA Job Monitor
                 </span>
             </a>
             <div class="ml-auto flex items-center gap-1">

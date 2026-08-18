@@ -23,6 +23,10 @@ class DatabaseSettings(BaseSettings):
         )
 
     @property
+    def psycopg_dsn(self) -> str:
+        return self.database_url.replace("+psycopg", "")
+
+    @property
     def database_info(self) -> str:
         return (
             f"dbname={self.db_name} "

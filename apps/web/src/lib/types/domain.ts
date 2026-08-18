@@ -38,12 +38,10 @@ export interface JobQueryResponse {
     totalPages: number;
 }
 
-export interface OptimizationStep {
-    energyChange: number;
-    rmsGrad: number;
-    maxGrad: number;
-    rmsStep: number;
-    maxStep: number;
+export interface Metric {
+    value: number;
+    /** ISO timestamp when the metric was recorded. */
+    recordedAt: string;
 }
 
 export interface Thresholds {
@@ -57,9 +55,12 @@ export interface Thresholds {
 export interface OptimizationData {
     numOptSteps: number;
     thresholds: Thresholds;
-    optSteps: OptimizationStep[];
-    scfEnergySteps: number[];
-    trajectoryFilePath: string;
+    energyChange: Metric[];
+    rmsGrad: Metric[];
+    maxGrad: Metric[];
+    rmsStep: Metric[];
+    maxStep: Metric[];
+    scfEnergySteps: Metric[];
 }
 
 export interface JobFile {
@@ -69,9 +70,4 @@ export interface JobFile {
     downloadPath: string;
     createdAt: string;
     updatedAt: string;
-}
-
-export interface LogEntry {
-    time: string;
-    content: string;
 }

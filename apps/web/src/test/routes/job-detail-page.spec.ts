@@ -21,9 +21,12 @@ const emptyOpt = {
     finished_dt: null,
     num_opt_steps: 0,
     thresholds: { energy_change: 0, rms_grad: 0, max_grad: 0, rms_step: 0, max_step: 0 },
-    opt_steps: [],
-    scf_energy_steps: [],
-    trajectory_file_path: ''
+    energy_change: [],
+    rms_grad: [],
+    max_grad: [],
+    rms_step: [],
+    max_step: [],
+    scf_energy_steps: []
 };
 
 const emptyGeometry = { num_steps: 0, steps: [] };
@@ -76,9 +79,9 @@ describe('JobDetailPage', () => {
         expect(screen.getByText('Queued')).toBeInTheDocument();
         expect(screen.getByText('--')).toBeInTheDocument();
 
-        expect(screen.getByRole('link', { name: 'View Log' })).toHaveAttribute(
+        expect(screen.getByRole('link', { name: 'View Output' })).toHaveAttribute(
             'href',
-            '/jobs/1/log'
+            '/jobs/1/output'
         );
         expect(screen.getByRole('link', { name: 'View Files' })).toHaveAttribute(
             'href',
