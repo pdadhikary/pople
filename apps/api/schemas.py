@@ -4,7 +4,17 @@ from typing import Annotated
 
 from database.models import Atom, JobStatus, MetricType
 from fastapi import File, Form, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, PlainSerializer
+
+
+def _serialize_utc(dt: datetime) -> str:
+    # DB stores naive UTC wall times; make them unambiguous for clients.
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.isoformat()
+
+
+UtcDateTime = Annotated[datetime, PlainSerializer(_serialize_utc, return_type=str)]
 
 
 class JobBase(BaseModel):
@@ -21,9 +31,9 @@ class JobSubmissionRequest(JobBase):
 class JobSubmissionResponse(JobBase):
     job_id: int
     job_status: JobStatus
-    queued_dt: datetime
-    started_dt: datetime | None
-    finished_dt: datetime | None
+    queued_dt: UtcDateTime
+    started_dt: UtcDateTime | None
+    finished_dt: UtcDateTime | None
 
 
 class JobQueryResponse(BaseModel):
@@ -44,7 +54,7 @@ class Thresholds(BaseModel):
 
 class Metric(BaseModel):
     value: float
-    recorded_dt: datetime
+    recorded_dt: UtcDateTime
 
 
 class JobDetailQueryResponse(JobSubmissionResponse):
@@ -62,8 +72,8 @@ class JobFile(BaseModel):
     filename: str
     size: int
     download_path: str
-    created_dt: datetime
-    last_updated_dt: datetime
+    created_dt: UtcDateTime
+    last_updated_dt: UtcDateTime
 
 
 class JobFileQueryResponse(BaseModel):
@@ -73,7 +83,7 @@ class JobFileQueryResponse(BaseModel):
 
 class GeometryQueryItem(BaseModel):
     atoms: list[Atom]
-    recorded_dt: datetime
+    recorded_dt: UtcDateTime
 
 
 class GeometryQueryResponse(BaseModel):
@@ -100,9 +110,9 @@ class JobStatusChangeMessage(WsMessage):
     job_id: int
     job_name: str
     job_status: JobStatus
-    queued_dt: datetime
-    started_dt: datetime | None
-    finished_dt: datetime | None
+    queued_dt: UtcDateTime
+    started_dt: UtcDateTime | None
+    finished_dt: UtcDateTime | None
 
 
 class NewMetricMessage(WsMessage):
@@ -111,11 +121,11 @@ class NewMetricMessage(WsMessage):
     metric_type: MetricType
     value: float
     threshold: float | None = None
-    recorded_dt: datetime
+    recorded_dt: UtcDateTime
 
 
 class NewGeometryMessage(WsMessage):
     type: MessageType
     job_id: int
     atoms: list[Atom]
-    recorded_dt: datetime
+    recorded_dt: UtcDateTime

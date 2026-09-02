@@ -8,6 +8,7 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+      TZ: ${TZ:-UTC}
     ports:
       - "5433:5432"
     volumes:
@@ -29,6 +30,7 @@ services:
       - .env
     environment:
       JOBS_DIR: /workspace/jobs
+      TZ: ${TZ:-UTC}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
@@ -50,6 +52,7 @@ services:
     environment:
       - ORIGIN=http://localhost:3000
       - PORT=3000
+      - TZ=${TZ:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
@@ -67,6 +70,7 @@ services:
       JOB_TIMEOUT_SECONDS: 259200
       LOG_LEVEL: INFO
       JOBS_DIR: /workspace/jobs
+      TZ: ${TZ:-UTC}
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}

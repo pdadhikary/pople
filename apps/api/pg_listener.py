@@ -74,7 +74,7 @@ class PGListener:
             if message is None:
                 continue
 
-            await get_manager().broadcast(message.job_id, message.model_dump())
+            await get_manager().broadcast(message.job_id, message.model_dump(mode="json"))
 
     async def _build_message(self, channel: str, payload: dict) -> WsMessage | None:
         job_id: int | None = payload.get("job_id")
