@@ -2,6 +2,7 @@
     import { onDestroy } from 'svelte';
     import type { Job } from '$lib/types/domain';
     import { getJob, getJobOutput, outputStreamUrl } from '$lib/services/api';
+    import { openJobSocket } from '$lib/services/ws.svelte';
     import LogStream from '$lib/features/job-log/LogStream.svelte';
     import Spinner from '$lib/components/Spinner.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
@@ -73,16 +74,43 @@
         stream.onerror = closeStream;
     });
 
-    // When the job leaves queued/running, close the stream and refresh once for the terminal status badge.
+    // Live status updates via WebSocket (flip the badge as soon as the job changes state).
+    let socket: WebSocket | undefined;
+
     $effect(() => {
-        if (job && job.status !== 'queued' && job.status !== 'running' && stream) {
-            stream.close();
-            stream = undefined;
+        if (!job || (job.status !== 'queued' && job.status !== 'running')) return;
+        if (socket) return;
+
+        socket = openJobSocket(jobId, (message) => {
+            if (message.type === 'job_status_changed') {
+                job = {
+                    ...job!,
+                    status: message.job_status ?? job!.status,
+                    queuedAt: message.queued_dt ?? job!.queuedAt,
+                    startedAt: message.started_dt ?? job!.startedAt,
+                    finishedAt: message.finished_dt ?? job!.finishedAt
+                };
+            }
+        });
+    });
+
+    // When the job leaves queued/running, close the stream + socket and refresh once for the terminal status badge.
+    $effect(() => {
+        if (job && job.status !== 'queued' && job.status !== 'running') {
+            if (stream) {
+                stream.close();
+                stream = undefined;
+            }
+            if (socket) {
+                socket.close();
+                socket = undefined;
+            }
         }
     });
 
     onDestroy(() => {
         stream?.close();
+        socket?.close();
     });
 </script>
 

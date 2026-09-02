@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { render, screen, waitFor } from '@testing-library/svelte';
 import DetailPage from '../../routes/jobs/[jobId]/+page.svelte';
-import { mockFetch, resetFetch } from '../mock-fetch';
+import { mockFetch, mockWebSocket, resetFetch } from '../mock-fetch';
 
 const apiJob = (id: number, status = 'queued') => ({
     job_id: id,
@@ -139,5 +139,62 @@ describe('JobDetailPage', () => {
         // table shows atoms for the latest step
         expect(screen.getAllByText('O').length).toBeGreaterThan(0);
         expect(screen.getAllByText('H')).toHaveLength(2);
+    });
+
+    it('opens a WebSocket and updates status on job_status_changed', async () => {
+        mockFetch({
+            'GET /jobs/1': { body: apiJob(1, 'running') },
+            'GET /jobs/1/optimization': { body: emptyOpt },
+            'GET /jobs/1/geometry': { body: emptyGeometry },
+            'GET /jobs/1/files/water_opt.inp': { text: '' }
+        });
+        const ws = mockWebSocket();
+        render(DetailPage, { params: { jobId: '1' } });
+
+        await screen.findByRole('heading', { name: 'water_opt' });
+        expect(screen.getByText('Running')).toBeInTheDocument();
+
+        expect(ws.instances).toHaveLength(1);
+        expect(ws.instances[0].url).toContain('/jobs/1/ws');
+
+        ws.instances[0].emit({
+            type: 'job_status_changed',
+            job_id: 1,
+            job_status: 'finished',
+            queued_dt: '2024-01-01T00:00:00Z',
+            started_dt: '2024-01-01T00:00:05Z',
+            finished_dt: '2024-01-01T00:00:10Z'
+        });
+
+        await screen.findByText('Finished');
+    });
+
+    it('appends a metric point on new_metric and shows the chart', async () => {
+        mockFetch({
+            'GET /jobs/1': { body: apiJob(1, 'running') },
+            'GET /jobs/1/optimization': { body: emptyOpt },
+            'GET /jobs/1/geometry': { body: emptyGeometry },
+            'GET /jobs/1/files/water_opt.inp': { text: '' }
+        });
+        const ws = mockWebSocket();
+        render(DetailPage, { params: { jobId: '1' } });
+
+        await screen.findByRole('heading', { name: 'water_opt' });
+        expect(
+            (await screen.findAllByText('No optimization data available')).length
+        ).toBeGreaterThan(0);
+
+        ws.instances[0].emit({
+            type: 'new_metric',
+            job_id: 1,
+            metric_type: 'energy_change',
+            value: -0.001,
+            recorded_dt: '2024-01-01T00:00:01Z'
+        });
+
+        // After a metric arrives, numOptSteps > 0 so the empty state disappears.
+        await waitFor(() => {
+            expect(screen.queryByText('No optimization data available')).not.toBeInTheDocument();
+        });
     });
 });

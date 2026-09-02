@@ -54,3 +54,48 @@ export function mockFetch(routes: {
 export function resetFetch(): void {
     vi.unstubAllGlobals();
 }
+
+/**
+ * A fake WebSocket for tests: records the URL it was constructed with and lets
+ * tests push messages through `emit()` (which invokes the registered `onmessage`).
+ */
+export interface MockWebSocket {
+    url: string;
+    emit(message: unknown): void;
+    close: ReturnType<typeof vi.fn>;
+}
+
+export interface MockWebSocketHandle {
+    instances: MockWebSocket[];
+    constructorMock: ReturnType<typeof vi.fn>;
+}
+
+export function mockWebSocket(): MockWebSocketHandle {
+    const instances: MockWebSocket[] = [];
+
+    const FakeWebSocket = vi.fn(function (
+        this: {
+            url: string;
+            onmessage: ((ev: MessageEvent) => void) | null;
+            close: ReturnType<typeof vi.fn>;
+        },
+        url: string
+    ) {
+        this.url = url;
+        this.onmessage = null;
+        this.close = vi.fn(() => {});
+        instances.push({
+            url,
+            emit: (message: unknown) => {
+                if (this.onmessage) {
+                    this.onmessage({ data: JSON.stringify(message) } as MessageEvent);
+                }
+            },
+            close: this.close
+        });
+    });
+
+    vi.stubGlobal('WebSocket', FakeWebSocket);
+
+    return { instances, constructorMock: FakeWebSocket };
+}

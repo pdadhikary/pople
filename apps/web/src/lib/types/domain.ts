@@ -1,5 +1,8 @@
 export type JobStatus = 'queued' | 'running' | 'finished' | 'cancelled' | 'error';
 
+export type MetricType =
+    'total_scf_energy' | 'energy_change' | 'max_grad' | 'rms_grad' | 'max_step' | 'rms_step';
+
 export interface Atom {
     element: string;
     x: number;

@@ -1,6 +1,8 @@
 <script lang="ts">
+    import { onDestroy } from 'svelte';
     import type { Job, JobFile } from '$lib/types/domain';
     import { getJob, getJobFiles } from '$lib/services/api';
+    import { openJobSocket } from '$lib/services/ws.svelte';
     import FileList from '$lib/features/job-files/FileList.svelte';
     import DownloadAllButton from '$lib/features/job-files/DownloadAllButton.svelte';
     import Spinner from '$lib/components/Spinner.svelte';
@@ -55,6 +57,35 @@
         void load();
     });
 
+    // Live status updates via WebSocket (files listing itself is REST-polled).
+    let socket: WebSocket | undefined;
+
+    $effect(() => {
+        if (!job || (job.status !== 'queued' && job.status !== 'running')) return;
+        if (socket) return;
+
+        socket = openJobSocket(jobId, (message) => {
+            if (message.type === 'job_status_changed') {
+                job = {
+                    ...job!,
+                    status: message.job_status ?? job!.status,
+                    queuedAt: message.queued_dt ?? job!.queuedAt,
+                    startedAt: message.started_dt ?? job!.startedAt,
+                    finishedAt: message.finished_dt ?? job!.finishedAt
+                };
+            }
+        });
+    });
+
+    // Close the socket once the job reaches a terminal state.
+    $effect(() => {
+        if (job && job.status !== 'queued' && job.status !== 'running' && socket) {
+            socket.close();
+            socket = undefined;
+        }
+    });
+
+    // Keep REST polling as a full-snapshot fallback for the file listing.
     $effect(() => {
         if (job && (job.status === 'queued' || job.status === 'running')) {
             const id = setInterval(() => {
@@ -62,6 +93,10 @@
             }, 5000);
             return () => clearInterval(id);
         }
+    });
+
+    onDestroy(() => {
+        socket?.close();
     });
 </script>
 

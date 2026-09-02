@@ -10,7 +10,8 @@ from typing import Annotated, cast
 
 import database.models as mo
 from database.session import get_db
-from fastapi import APIRouter, Depends, Form, HTTPException, Query
+from context import get_manager
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 from pople_logging import get_logger
@@ -449,3 +450,20 @@ def _split_complete_lines(buffer: str) -> tuple[list[str], str]:
         return [], buffer
     parts = buffer.split("\n")
     return parts[:-1], parts[-1]
+
+
+@jobs_router.websocket("/{job_id}/ws")
+async def job_ws(job_id: int, ws: WebSocket):
+    """Subscribe a client to live job updates (status, metric, geometry).
+
+    The client only needs to connect; the server pushes messages via
+    ConnectionManager.broadcast() from pg_listener. The connection stays
+    open until the client disconnects.
+    """
+    await get_manager().connect(job_id, ws)
+    try:
+        await ws.receive()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        get_manager().disconnect(job_id, ws)

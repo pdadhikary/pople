@@ -9,7 +9,7 @@ import type {
     Thresholds
 } from '$lib/types/domain';
 
-const API_BASE: string = import.meta.env.VITE_API_BASE_URL ?? 'http://api:8000';
+const API_BASE: string = `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export class ApiError extends Error {
     constructor(

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { onDestroy } from 'svelte';
     import type { GeometryData, Job, OptimizationData } from '$lib/types/domain';
     import {
         getGeometryData,
@@ -6,6 +7,7 @@
         getJobInputFileText,
         getOptimizationData
     } from '$lib/services/api';
+    import { openJobSocket, type JobWsMessage } from '$lib/services/ws.svelte';
     import JobHeader from '$lib/features/job-detail/JobHeader.svelte';
     import ScfEnergyChart from '$lib/features/job-detail/ScfEnergyChart.svelte';
     import ConvergenceChart from '$lib/features/job-detail/ConvergenceChart.svelte';
@@ -76,6 +78,86 @@
         void load();
     });
 
+    // Live updates via WebSocket: apply incremental status/metric/geometry changes.
+    let socket: WebSocket | undefined;
+
+    $effect(() => {
+        if (!job || (job.status !== 'queued' && job.status !== 'running')) return;
+        if (socket) return;
+
+        socket = openJobSocket(jobId, (message) => {
+            if (message.type === 'job_status_changed') {
+                job = {
+                    ...job!,
+                    status: message.job_status ?? job!.status,
+                    queuedAt: message.queued_dt ?? job!.queuedAt,
+                    startedAt: message.started_dt ?? job!.startedAt,
+                    finishedAt: message.finished_dt ?? job!.finishedAt
+                };
+            } else if (message.type === 'new_metric') {
+                applyMetric(message);
+            } else if (message.type === 'new_geometry') {
+                applyGeometry(message);
+            }
+        });
+    });
+
+    function applyMetric(message: JobWsMessage) {
+        if (!optData || message.metric_type === undefined || message.value === undefined) return;
+        const series = metricSeries(message.metric_type);
+        if (!series) return;
+        series.push({ value: message.value, recordedAt: message.recorded_dt ?? '' });
+        // Recompute step count from the longest series (convergence metrics grow in lockstep).
+        const longest = Math.max(
+            optData.energyChange.length,
+            optData.rmsGrad.length,
+            optData.maxGrad.length,
+            optData.rmsStep.length,
+            optData.maxStep.length
+        );
+        optData = { ...optData, numOptSteps: longest };
+    }
+
+    function metricSeries(type: string): { value: number; recordedAt: string }[] | undefined {
+        switch (type) {
+            case 'energy_change':
+                return optData?.energyChange;
+            case 'rms_grad':
+                return optData?.rmsGrad;
+            case 'max_grad':
+                return optData?.maxGrad;
+            case 'rms_step':
+                return optData?.rmsStep;
+            case 'max_step':
+                return optData?.maxStep;
+            case 'total_scf_energy':
+                return optData?.scfEnergySteps;
+            default:
+                return undefined;
+        }
+    }
+
+    function applyGeometry(message: JobWsMessage) {
+        if (!geometry || !message.atoms) return;
+        geometry = {
+            ...geometry,
+            numSteps: geometry.numSteps + 1,
+            steps: [
+                ...geometry.steps,
+                { atoms: message.atoms, recordedAt: message.recorded_dt ?? '' }
+            ]
+        };
+    }
+
+    // Close the socket once the job reaches a terminal state.
+    $effect(() => {
+        if (job && job.status !== 'queued' && job.status !== 'running' && socket) {
+            socket.close();
+            socket = undefined;
+        }
+    });
+
+    // Keep the REST polling as a full-snapshot fallback (re-syncs if the WS drops).
     $effect(() => {
         if (job && (job.status === 'queued' || job.status === 'running')) {
             const id = setInterval(() => {
@@ -83,6 +165,10 @@
             }, 5000);
             return () => clearInterval(id);
         }
+    });
+
+    onDestroy(() => {
+        socket?.close();
     });
 </script>
 
