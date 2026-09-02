@@ -55,12 +55,15 @@ services:
         condition: service_healthy
 
   worker:
+    shm_size: '4gb'
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
     env_file:
       - .env
     environment:
+      OMPI_MCA_btl_vader_single_copy_mechanism: none
+      OMPI_MCA_osc: ^ucx
       JOB_TIMEOUT_SECONDS: 259200
       LOG_LEVEL: INFO
       JOBS_DIR: /workspace/jobs

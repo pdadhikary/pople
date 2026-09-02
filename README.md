@@ -46,7 +46,7 @@ without SSH access to the compute host or ORCA expertise at the command line.
 
 ## Architecture
 
-Pople is a **`uv`-workspace Python monorepo** (Python 3.13) plus a standalone
+Pople is a **`uv`-workspace Python monorepo** (Python 3.14) plus a standalone
 SvelteKit app, orchestrated with Docker Compose.
 
 ```

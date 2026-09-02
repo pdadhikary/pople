@@ -3,7 +3,7 @@ name = "database"
 version = "0.1.0"
 description = "Database session management for pople"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.19.1",
     "psycopg[binary]>=3.3.4",
