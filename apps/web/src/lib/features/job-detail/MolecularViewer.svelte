@@ -13,6 +13,7 @@
     let viewer: ThreeDmolViewer | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let unavailable = $state(false);
+    let showLabels = $state(false);
 
     const hasData = $derived(!!atoms && atoms.length > 0);
 
@@ -43,6 +44,27 @@
         viewer.render();
     });
 
+    // Keep per-atom labels in sync with the current geometry and the toggle.
+    $effect(() => {
+        if (!viewer || !atoms || atoms.length === 0) return;
+        const glviewer = viewer;
+        glviewer.removeAllLabels();
+        if (showLabels) {
+            atoms.forEach((atom, i) => {
+                glviewer.addLabel(`${atom.element}${i + 1}`, {
+                    position: { x: atom.x, y: atom.y, z: atom.z },
+                    alignment: 'center',
+                    inFront: true,
+                    showBackground: false,
+                    bold: true,
+                    fontSize: 15,
+                    fontColor: '#1e293b'
+                });
+            });
+        }
+        glviewer.render();
+    });
+
     onDestroy(() => {
         resizeObserver?.disconnect();
         resizeObserver = undefined;
@@ -61,7 +83,17 @@
         class="relative h-80 w-full overflow-hidden rounded-md"
         role="img"
         aria-label="3D molecular structure of the selected optimization step"
-    ></div>
+    >
+        <button
+            type="button"
+            role="switch"
+            aria-checked={showLabels}
+            class="absolute top-2 right-2 z-10 rounded-md border border-slate-300 bg-white/90 px-2 py-1 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            onclick={() => (showLabels = !showLabels)}
+        >
+            {showLabels ? 'Hide Labels' : 'Show Labels'}
+        </button>
+    </div>
     <p class="mt-2 text-center text-xs text-slate-500">Drag to rotate · scroll to zoom</p>
 {:else}
     <EmptyState
