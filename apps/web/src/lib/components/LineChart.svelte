@@ -18,7 +18,9 @@
         yTitle,
         unit,
         legend = false,
-        baseline
+        baseline,
+        xMarker,
+        height = 'h-64'
     }: {
         labels: string[];
         datasets: ChartDataset[];
@@ -27,6 +29,9 @@
         unit?: string;
         legend?: boolean;
         baseline?: number;
+        /** Draw a vertical dashed line at the given x-axis label. */
+        xMarker?: string;
+        height?: string;
     } = $props();
 
     let canvas: HTMLCanvasElement | undefined = $state();
@@ -37,10 +42,10 @@
         id: 'baselineLine',
         afterDraw(chartEl: Chart) {
             if (baseline === undefined) return;
-            const ctx = chartEl.ctx;
             const scale = chartEl.scales.y;
             if (!scale) return;
             const y = scale.getPixelForValue(baseline);
+            const ctx = chartEl.ctx;
             ctx.save();
             ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
             ctx.lineWidth = 1;
@@ -48,6 +53,28 @@
             ctx.beginPath();
             ctx.moveTo(chartEl.chartArea.left, y);
             ctx.lineTo(chartEl.chartArea.right, y);
+            ctx.stroke();
+            ctx.restore();
+        }
+    };
+
+    const xMarkerPlugin = {
+        id: 'xMarkerLine',
+        afterDraw(chartEl: Chart) {
+            if (xMarker === undefined) return;
+            const scale = chartEl.scales.x;
+            if (!scale) return;
+            const index = (chartEl.data.labels ?? []).indexOf(xMarker);
+            if (index < 0) return;
+            const x = scale.getPixelForValue(index);
+            const ctx = chartEl.ctx;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(249, 115, 22, 0.55)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, chartEl.chartArea.top);
+            ctx.lineTo(x, chartEl.chartArea.bottom);
             ctx.stroke();
             ctx.restore();
         }
@@ -100,7 +127,7 @@
                     }
                 }
             },
-            plugins: [baselinePlugin]
+            plugins: [baselinePlugin, xMarkerPlugin]
         });
     });
 
@@ -119,7 +146,7 @@
     });
 </script>
 
-<div class="relative h-64 w-full">
+<div class={`relative w-full ${height}`}>
     {#if unavailable}
         <p class="flex h-full items-center justify-center text-sm text-slate-400">
             Chart unavailable

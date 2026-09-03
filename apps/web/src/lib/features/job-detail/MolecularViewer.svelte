@@ -5,7 +5,17 @@
     import { toXyz } from './xyz';
     import EmptyState from '$lib/components/EmptyState.svelte';
 
-    let { atoms, moleculeName = 'molecule' }: { atoms?: Atom[]; moleculeName?: string } = $props();
+    let {
+        atoms,
+        moleculeName = 'molecule',
+        selectedIndices = [],
+        onAtomToggle
+    }: {
+        atoms?: Atom[];
+        moleculeName?: string;
+        selectedIndices?: number[];
+        onAtomToggle?: (index: number) => void;
+    } = $props();
 
     let container = $state<HTMLDivElement>();
     // Intentionally NOT `$state`: 3Dmol mutates the viewer object heavily and
@@ -16,6 +26,10 @@
     let showLabels = $state(false);
 
     const hasData = $derived(!!atoms && atoms.length > 0);
+
+    const baseStyle = { stick: { radius: 0.15 }, sphere: { radius: 0.35 } };
+    const selectionStyle = { stick: { radius: 0.15 }, sphere: { radius: 0.45, color: '#f97316' } };
+    const selectionColor = '#f97316';
 
     $effect(() => {
         if (!container || unavailable) return;
@@ -33,18 +47,56 @@
         }
         if (!atoms || atoms.length === 0) {
             viewer.removeAllModels();
+            viewer.removeAllShapes();
             viewer.render();
             return;
         }
         const xyz = toXyz(moleculeName, atoms);
         viewer.removeAllModels();
+        viewer.removeAllShapes();
         viewer.addModel(xyz, 'xyz');
-        viewer.setStyle({}, { stick: { radius: 0.15 }, sphere: { radius: 0.35 } });
+        viewer.setStyle({}, baseStyle);
         viewer.zoomTo();
         viewer.render();
     });
 
-    // Keep per-atom labels in sync with the current geometry and the toggle.
+    // Re-apply click handling after every model rebuild. Must be followed by
+    // render() for 3Dmol to refresh its clickable atom list.
+    $effect(() => {
+        if (!viewer || !atoms || atoms.length === 0) return;
+        const glviewer = viewer;
+        glviewer.setClickable({}, true, (atom) => {
+            if (typeof atom.serial === 'number') onAtomToggle?.(atom.serial);
+        });
+        glviewer.render();
+    });
+
+    // Highlight selected atoms and draw dashed connector lines between them.
+    $effect(() => {
+        if (!viewer || !atoms || atoms.length === 0) return;
+        const glviewer = viewer;
+        glviewer.removeAllShapes();
+        glviewer.setStyle({}, baseStyle);
+        for (const index of selectedIndices) {
+            if (index < 0 || index >= atoms.length) continue;
+            glviewer.setStyle({ serial: index }, selectionStyle);
+        }
+        for (let i = 0; i + 1 < selectedIndices.length; i++) {
+            const a = atoms[selectedIndices[i]];
+            const b = atoms[selectedIndices[i + 1]];
+            if (!a || !b) continue;
+            glviewer.addLine({
+                start: { x: a.x, y: a.y, z: a.z },
+                end: { x: b.x, y: b.y, z: b.z },
+                color: selectionColor,
+                dashed: true
+            });
+        }
+        glviewer.render();
+    });
+
+    // Keep labels in sync with the geometry, the element-label toggle, and the
+    // selection: element labels (optional) plus selection-order badges.
     $effect(() => {
         if (!viewer || !atoms || atoms.length === 0) return;
         const glviewer = viewer;
@@ -62,6 +114,21 @@
                 });
             });
         }
+        selectedIndices.forEach((index, order) => {
+            const atom = atoms[index];
+            if (!atom) return;
+            glviewer.addLabel(String(order + 1), {
+                position: { x: atom.x, y: atom.y, z: atom.z },
+                alignment: 'bottomCenter',
+                screenOffset: { x: 0, y: -8 },
+                inFront: true,
+                showBackground: true,
+                backgroundColor: '#f97316',
+                fontColor: 'white',
+                bold: true,
+                fontSize: 11
+            });
+        });
         glviewer.render();
     });
 
@@ -94,7 +161,9 @@
             {showLabels ? 'Hide Labels' : 'Show Labels'}
         </button>
     </div>
-    <p class="mt-2 text-center text-xs text-slate-500">Drag to rotate · scroll to zoom</p>
+    <p class="mt-2 text-center text-xs text-slate-500">
+        Drag to rotate · scroll to zoom · click atoms to measure
+    </p>
 {:else}
     <EmptyState
         title="No geometry available"

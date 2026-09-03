@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import CoordinateTable from './CoordinateTable.svelte';
 import type { Atom } from '$lib/types/domain';
 
@@ -35,5 +35,54 @@ describe('CoordinateTable', () => {
         render(CoordinateTable, { coordinates: atoms });
         expect(screen.getByText('O')).toBeInTheDocument();
         expect(screen.getAllByText('H')).toHaveLength(2);
+    });
+
+    it('renders non-interactive index cells without a toggle handler', () => {
+        render(CoordinateTable, { coordinates: atoms });
+        expect(
+            screen.queryByRole('button', { name: 'Toggle atom 1 (O) selection' })
+        ).not.toBeInTheDocument();
+    });
+
+    it('renders toggle buttons with aria-pressed reflecting the selection', () => {
+        render(CoordinateTable, {
+            coordinates: atoms,
+            selectedIndices: [0],
+            onAtomToggle: () => undefined
+        });
+        expect(screen.getByRole('button', { name: 'Toggle atom 1 (O) selection' })).toHaveAttribute(
+            'aria-pressed',
+            'true'
+        );
+        expect(screen.getByRole('button', { name: 'Toggle atom 2 (H) selection' })).toHaveAttribute(
+            'aria-pressed',
+            'false'
+        );
+    });
+
+    it('marks selected rows with a highlight class', () => {
+        const { container } = render(CoordinateTable, {
+            coordinates: atoms,
+            selectedIndices: [1],
+            onAtomToggle: () => undefined
+        });
+        const rows = container.querySelectorAll('tbody tr');
+        expect(rows[1].className).toContain('bg-orange-50');
+        expect(rows[0].className).not.toContain('bg-orange-50');
+    });
+
+    it('calls onAtomToggle with the atom index when a row button is clicked', async () => {
+        const onAtomToggle = vi.fn();
+        render(CoordinateTable, { coordinates: atoms, onAtomToggle });
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 3 (H) selection' }));
+        expect(onAtomToggle).toHaveBeenCalledExactlyOnceWith(2);
+    });
+
+    it('toggles via row click without double-firing through the button', async () => {
+        const onAtomToggle = vi.fn();
+        const { container } = render(CoordinateTable, { coordinates: atoms, onAtomToggle });
+        const firstRow = container.querySelectorAll('tbody tr')[0];
+        await fireEvent.click(firstRow);
+        expect(onAtomToggle).toHaveBeenCalledExactlyOnceWith(0);
     });
 });

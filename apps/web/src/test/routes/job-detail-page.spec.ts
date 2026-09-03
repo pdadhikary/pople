@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import DetailPage from '../../routes/jobs/[jobId]/+page.svelte';
 import { mockFetch, mockWebSocket, resetFetch } from '../mock-fetch';
 
@@ -196,5 +196,62 @@ describe('JobDetailPage', () => {
         await waitFor(() => {
             expect(screen.queryByText('No optimization data available')).not.toBeInTheDocument();
         });
+    });
+
+    it('shows the distance measurement when two atoms are selected via the table', async () => {
+        mockFetch({
+            'GET /jobs/1': { body: apiJob(1, 'finished') },
+            'GET /jobs/1/optimization': { body: emptyOpt },
+            'GET /jobs/1/geometry': { body: geometryWithSteps },
+            'GET /jobs/1/files/water_opt.inp': { text: '' }
+        });
+        render(DetailPage, { params: { jobId: '1' } });
+
+        await screen.findByText('Step 2 of 2');
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 1 (O) selection' }));
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 2 (H) selection' }));
+
+        expect(screen.getByRole('heading', { name: 'Measurements' })).toBeInTheDocument();
+        // Distance between O and H of the latest step (step 2).
+        expect(screen.getByText(/0\.9360/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Clear Selection' })).toBeInTheDocument();
+    });
+
+    it('adds the angle measurement when a third atom is selected', async () => {
+        mockFetch({
+            'GET /jobs/1': { body: apiJob(1, 'finished') },
+            'GET /jobs/1/optimization': { body: emptyOpt },
+            'GET /jobs/1/geometry': { body: geometryWithSteps },
+            'GET /jobs/1/files/water_opt.inp': { text: '' }
+        });
+        render(DetailPage, { params: { jobId: '1' } });
+
+        await screen.findByText('Step 2 of 2');
+        // Select H1, O, H2 so the angle is measured at the oxygen vertex.
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 2 (H) selection' }));
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 1 (O) selection' }));
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 3 (H) selection' }));
+
+        expect(screen.getByText(/106\.5/)).toBeInTheDocument();
+    });
+
+    it('clears the measurements when Clear Selection is clicked', async () => {
+        mockFetch({
+            'GET /jobs/1': { body: apiJob(1, 'finished') },
+            'GET /jobs/1/optimization': { body: emptyOpt },
+            'GET /jobs/1/geometry': { body: geometryWithSteps },
+            'GET /jobs/1/files/water_opt.inp': { text: '' }
+        });
+        render(DetailPage, { params: { jobId: '1' } });
+
+        await screen.findByText('Step 2 of 2');
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 1 (O) selection' }));
+        await fireEvent.click(screen.getByRole('button', { name: 'Toggle atom 2 (H) selection' }));
+
+        expect(screen.getByRole('heading', { name: 'Measurements' })).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByRole('button', { name: 'Clear Selection' }));
+
+        expect(screen.queryByRole('heading', { name: 'Measurements' })).not.toBeInTheDocument();
     });
 });

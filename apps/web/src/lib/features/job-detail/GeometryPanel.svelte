@@ -4,6 +4,7 @@
     import MolecularViewer from './MolecularViewer.svelte';
     import CoordinateTable from './CoordinateTable.svelte';
     import OptimizationSlider from './OptimizationSlider.svelte';
+    import MeasurementPanel from './MeasurementPanel.svelte';
     import EmptyState from '$lib/components/EmptyState.svelte';
     import { toXyz } from './xyz';
 
@@ -11,6 +12,19 @@
 
     let selectedStep = $state(1);
     let copied = $state(false);
+    let selectedIndices = $state<number[]>([]);
+
+    function toggleAtom(index: number) {
+        if (selectedIndices.includes(index)) {
+            selectedIndices = selectedIndices.filter((i) => i !== index);
+        } else if (selectedIndices.length < 4) {
+            selectedIndices = [...selectedIndices, index];
+        }
+    }
+
+    function clearSelection() {
+        selectedIndices = [];
+    }
 
     const numSteps = $derived(geometry?.steps.length ?? 0);
     const hasSteps = $derived(numSteps > 0);
@@ -86,12 +100,32 @@
         </div>
         <div class="grid gap-6 lg:grid-cols-5">
             <div class="lg:col-span-3">
-                <MolecularViewer moleculeName={jobName} atoms={selectedAtoms} />
+                <MolecularViewer
+                    moleculeName={jobName}
+                    atoms={selectedAtoms}
+                    {selectedIndices}
+                    onAtomToggle={toggleAtom}
+                />
             </div>
             <div class="lg:col-span-2">
                 <h4 class="mb-3 text-sm font-semibold text-slate-800">Molecular Coordinates</h4>
-                <CoordinateTable coordinates={selectedAtoms} />
+                <CoordinateTable
+                    coordinates={selectedAtoms}
+                    {selectedIndices}
+                    onAtomToggle={toggleAtom}
+                />
             </div>
         </div>
+
+        {#if selectedIndices.length >= 2 && geometry}
+            <div class="mt-6">
+                <MeasurementPanel
+                    steps={geometry.steps}
+                    {selectedIndices}
+                    currentStep={selectedStep}
+                    onClear={clearSelection}
+                />
+            </div>
+        {/if}
     {/if}
 </div>
